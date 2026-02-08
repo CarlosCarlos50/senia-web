@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SeñIA - Traductor de Lengua de Señas</title>
+    
+    <!-- MediaPipe desde CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #121212;
+            color: white;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        h1 {
+            color: #00e676;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        #resultado {
+            font-size: 3rem;
+            font-weight: bold;
+            margin: 20px;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #00e676;
+            border-radius: 10px;
+            min-height: 80px;
+            text-align: center;
+            border: 3px solid #333;
+            min-width: 200px;
+        }
+        
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            height: 480px;
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border: 3px solid #333;
+            margin: 0 auto;
+        }
+        
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+        
+        .instrucciones {
+            margin-top: 20px;
+            color: #aaa;
+            text-align: center;
+            max-width: 640px;
+        }
+        
+        @media (max-width: 768px) {
+            .video-container { height: 360px; }
+            #resultado { font-size: 2.5rem; padding: 15px; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>SeñIA Traductor de Lengua de Señas</h1>
+    
+    <div id="resultado">HAZ CLIC PARA INICIAR</div>
+
+    <div class="video-container">
+        <video class="input_video"></video>
+    </div>
+
+    <p class="instrucciones">
+        • Haz clic en cualquier lugar para activar la cámara<br>
+        • Muestra tu mano a la cámara<br>
+        • Asegúrate de tener buena iluminación<br>
+        • Funciona mejor en Chrome/Edge
+    </p>
+
+    <script>
+        // 🔧 IMPORTANTE: Cambia esta URL por la de TU API
+        const API_URL = "https://senia-api.onrender.com/predecir";
+        
+        const videoElement = document.querySelector('.input_video');
+        const resultadoDiv = document.getElementById('resultado');
+        
+        // 🔧 ETIQUETAS ACTUALIZADAS: Solo las 21 letras que tu modelo reconoce
+        // IMPORTANTE: Este array DEBE coincidir con el orden de entrenamiento de tu modelo
+        const letras = ["A", "B", "C", "D", "E", "F", "G", "H", "I", 
+                       "L", "M", "N", "O", "P", "R", "S", "T", 
+                       "U", "V", "W", "Y"];
+        
+        // Nota: Faltan J, K, Q, X, Z (tu modelo no las reconoce)
+        // El modelo devolverá índices del 0 al 20
+        
+        async function iniciarSistema() {
+            try {
+                resultadoDiv.textContent = "Iniciando...";
+                
+                // 1. Configurar MediaPipe Hands
+                const hands = new Hands({
+                    locateFile: (file) => 
+                        `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+                });
+                
+                hands.setOptions({
+                    maxNumHands: 1,
+                    modelComplexity: 0,
+                    minDetectionConfidence: 0.6,
+                    minTrackingConfidence: 0.6
+                });
+                
+                // 2. Procesar resultados
+                let ultimaPrediccion = '';
+                let ultimoTiempo = 0;
+                const intervaloMinimo = 400; // ms entre predicciones
+                
+                hands.onResults(async (results) => {
+                    const ahora = Date.now();
+                    
+                    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                        // Evitar predicciones demasiado seguidas
+                        if (ahora - ultimoTiempo < intervaloMinimo) return;
+                        
+                        const landmarks = results.multiHandLandmarks[0];
+                        const puntos = [];
+                        
+                        // Extraer los 63 valores (21 puntos * 3 coordenadas)
+                        landmarks.forEach(punto => {
+                            puntos.push(punto.x, punto.y, punto.z);
+                        });
+                        
+                        // Enviar a la API
+                        try {
+                            const response = await fetch(API_URL, {
+                                method: 'POST',
+                                headers: { 
+                                    'Content-Type': 'application/json',
+                                    'Accept': 'application/json'
+                                },
+                                body: JSON.stringify({ puntos: puntos })
+                            });
+                            
+                            if (!response.ok) {
+                                throw new Error(`Error API: ${response.status}`);
+                            }
+                            
+                            const data = await response.json();
+                            const indice = data.indice;
+                            
+                            // 🔧 IMPORTANTE: Validar que el índice esté en el rango correcto (0-20)
+                            if (indice >= 0 && indice < letras.length) {
+                                const letra = letras[indice];
+                                if (letra !== ultimaPrediccion) {
+                                    resultadoDiv.textContent = letra;
+                                    ultimaPrediccion = letra;
+                                    console.log(`Predicción: ${letra} (índice ${indice})`);
+                                }
+                            } else if (indice === -1) {
+                                resultadoDiv.textContent = "Error modelo";
+                            } else {
+                                resultadoDiv.textContent = "?";
+                                console.warn(`Índice fuera de rango: ${indice}`);
+                            }
+                            
+                            ultimoTiempo = ahora;
+                            
+                        } catch (error) {
+                            console.error('Error en predicción:', error);
+                            resultadoDiv.textContent = "Error API";
+                        }
+                    } else {
+                        resultadoDiv.textContent = "✋ Muestra tu mano";
+                        ultimaPrediccion = '';
+                    }
+                });
+                
+                // 3. Iniciar cámara
+                const camera = new Camera(videoElement, {
+                    onFrame: async () => {
+                        await hands.send({ image: videoElement });
+                    },
+                    width: 640,
+                    height: 480,
+                    facingMode: 'user'
+                });
+                
+                await camera.start();
+                resultadoDiv.textContent = "✅ ¡Listo! Muestra tu mano";
+                
+                // Mostrar información en consola
+                console.log(`Modelo configurado para ${letras.length} letras:`);
+                console.log(letras.map((l, i) => `${i}: ${l}`).join(', '));
+                
+            } catch (error) {
+                console.error('Error crítico:', error);
+                resultadoDiv.textContent = "❌ Error al iniciar";
+                
+                if (error.name === 'NotAllowedError') {
+                    alert("Permiso de cámara denegado. Por favor, recarga y permite acceso.");
+                } else if (error.name === 'NotFoundError') {
+                    alert("No se encontró cámara. Conecta una cámara o verifica permisos.");
+                }
+            }
+        }
+        
+        // Eventos para iniciar
+        document.addEventListener('click', () => {
+            if (!window.sistemaIniciado) {
+                window.sistemaIniciado = true;
+                iniciarSistema();
+            }
+        }, { once: true });
+        
+        // También iniciar con tecla Espacio
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && !window.sistemaIniciado) {
+                window.sistemaIniciado = true;
+                iniciarSistema();
+            }
+        });
+    </script>
+</body>
+</html>
