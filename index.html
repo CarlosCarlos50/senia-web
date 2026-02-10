@@ -63,57 +63,67 @@
             transform: scaleX(-1);
         }
         
+        .output_canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: none;
+        }
+        
         .instrucciones {
             margin-top: 20px;
             color: #aaa;
             text-align: center;
             max-width: 640px;
         }
+
+        .controles {
+            margin: 15px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .btn {
+            background: #333;
+            color: white;
+            border: 2px solid #00e676;
+            padding: 10px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-family: 'Segoe UI', sans-serif;
+            transition: all 0.3s;
+        }
+
+        .btn:hover {
+            background: #00e676;
+            color: #121212;
+        }
         
         @media (max-width: 768px) {
             .video-container { height: 360px; }
             #resultado { font-size: 2.5rem; padding: 15px; }
+            .btn { padding: 8px 16px; font-size: 0.9rem; }
         }
     </style>
 </head>
 <body>
 
     <h1>SeñIA Traductor de Lengua de Señas</h1>
-    <!-- Agrega esto después del h1 -->
-<div class="controles">
-    <button id="togglePuntos" class="btn">🔘 Mostrar Puntos</button>
-    <button id="toggleCamara" class="btn">📷 Cambiar Cámara</button>
-</div>
-
-<style>
-.controles {
-    margin: 15px;
-    display: flex;
-    gap: 10px;
-    flex-wrap: wrap;
-    justify-content: center;
-}
-
-.btn {
-    background: #333;
-    color: white;
-    border: 2px solid #00e676;
-    padding: 10px 20px;
-    border-radius: 20px;
-    cursor: pointer;
-    font-family: 'Segoe UI', sans-serif;
-    transition: all 0.3s;
-}
-
-.btn:hover {
-    background: #00e676;
-    color: #121212;
-}
-</style>
+    <div class="controles">
+        <button id="togglePuntos" class="btn">🔘 Mostrar Puntos</button>
+        <button id="toggleCamara" class="btn">📷 Cambiar Cámara</button>
+    </div>
+    
     <div id="resultado">HAZ CLIC PARA INICIAR</div>
 
     <div class="video-container">
         <video class="input_video"></video>
+        <canvas class="output_canvas"></canvas>
     </div>
 
     <p class="instrucciones">
@@ -124,172 +134,141 @@
     </p>
 
     <script>
-        // 🔧 IMPORTANTE: Cambia esta URL por la de TU API
+        // 🔧 CONFIGURACIÓN
         const API_URL = "https://senia-api.onrender.com/predecir";
         
+        // Elementos DOM
         const videoElement = document.querySelector('.input_video');
+        const canvasElement = document.querySelector('.output_canvas');
         const resultadoDiv = document.getElementById('resultado');
+        const ctx = canvasElement.getContext('2d');
         
-        // 🔧 ETIQUETAS ACTUALIZADAS: Solo las 21 letras que tu modelo reconoce
-        // IMPORTANTE: Este array DEBE coincidir con el orden de entrenamiento de tu modelo
+        // Etiquetas para las 21 letras
         const letras = ["A", "B", "C", "D", "E", "F", "G", "H", "I", 
                        "L", "M", "N", "O", "P", "R", "S", "T", 
                        "U", "V", "W", "Y"];
         
-        // Nota: Faltan J, K, Q, X, Z (tu modelo no las reconoce)
-        // El modelo devolverá índices del 0 al 20
-        // Variables globales
-let mostrarPuntos = false;
-let canvasCtx;
-let canvasElement;
-
-// En la función iniciarSistema, después de crear videoElement:
-canvasElement = document.createElement('canvas');
-canvasElement.className = 'output_canvas';
-canvasElement.width = 640;
-canvasElement.height = 480;
-canvasElement.style.cssText = `
-    position: absolute;
-    top: 0;
-    left: 0;
-    pointer-events: none;
-`;
-document.querySelector('.video-container').appendChild(canvasElement);
-canvasCtx = canvasElement.getContext('2d');
-
-// Modifica la función hands.onResults:
-hands.onResults((results) => {
-    const ahora = Date.now();
-    
-    // Limpiar canvas
-    canvasCtx.save();
-    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-    
-    // Dibujar la imagen de la cámara
-    canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-    
-    // Si mostrarPuntos es true, dibujar landmarks
-    if (mostrarPuntos && results.multiHandLandmarks) {
-        dibujarLandmarks(results.multiHandLandmarks, canvasCtx);
-    }
-    
-    canvasCtx.restore();
-    
-    // Resto del código para predicción...
-});
-
-// Función para dibujar landmarks
-function dibujarLandmarks(landmarks, ctx) {
-    ctx.strokeStyle = '#00FF00';
-    ctx.fillStyle = '#FF0000';
-    ctx.lineWidth = 2;
-    
-    // Conexiones de los dedos (índices de MediaPipe Hands)
-    const CONEXIONES = [
-        [0,1],[1,2],[2,3],[3,4],           // Pulgar
-        [0,5],[5,6],[6,7],[7,8],           // Índice
-        [0,9],[9,10],[10,11],[11,12],      // Medio
-        [0,13],[13,14],[14,15],[15,16],    // Anular
-        [0,17],[17,18],[18,19],[19,20]     // Meñique
-    ];
-    
-    landmarks.forEach(landmarksDeMano => {
-        // Dibujar conexiones
-        CONEXIONES.forEach(([inicio, fin]) => {
-            const puntoInicio = landmarksDeMano[inicio];
-            const puntoFin = landmarksDeMano[fin];
+        // Variables de estado
+        let mostrarPuntos = false;
+        let camaraFrontal = true;
+        let cameraInstance = null;
+        let handsInstance = null;
+        let sistemaIniciado = false;
+        
+        // Configurar canvas
+        canvasElement.width = 640;
+        canvasElement.height = 480;
+        
+        // Conexiones de la mano para dibujar
+        const CONEXIONES_MANO = [
+            [0,1],[1,2],[2,3],[3,4],        // Pulgar
+            [0,5],[5,6],[6,7],[7,8],        // Índice
+            [0,9],[9,10],[10,11],[11,12],   // Medio
+            [0,13],[13,14],[14,15],[15,16], // Anular
+            [0,17],[17,18],[18,19],[19,20]  // Meñique
+        ];
+        
+        // ==================== FUNCIONES DE DIBUJO ====================
+        
+        function dibujarLandmarks(landmarks) {
+            if (!landmarks || landmarks.length === 0) return;
             
-            ctx.beginPath();
-            ctx.moveTo(puntoInicio.x * canvasElement.width, 
-                      puntoInicio.y * canvasElement.height);
-            ctx.lineTo(puntoFin.x * canvasElement.width, 
-                      puntoFin.y * canvasElement.height);
-            ctx.stroke();
-        });
+            ctx.strokeStyle = '#00FF00';
+            ctx.fillStyle = '#FF0000';
+            ctx.lineWidth = 2;
+            
+            // Dibujar conexiones
+            CONEXIONES_MANO.forEach(([inicio, fin]) => {
+                const puntoInicio = landmarks[inicio];
+                const puntoFin = landmarks[fin];
+                
+                ctx.beginPath();
+                ctx.moveTo(puntoInicio.x * canvasElement.width, 
+                          puntoInicio.y * canvasElement.height);
+                ctx.lineTo(puntoFin.x * canvasElement.width, 
+                          puntoFin.y * canvasElement.height);
+                ctx.stroke();
+            });
+            
+            // Dibujar puntos
+            landmarks.forEach(punto => {
+                ctx.beginPath();
+                ctx.arc(punto.x * canvasElement.width,
+                       punto.y * canvasElement.height,
+                       4, 0, 2 * Math.PI);
+                ctx.fill();
+            });
+        }
         
-        // Dibujar puntos
-        landmarksDeMano.forEach(punto => {
-            ctx.beginPath();
-            ctx.arc(punto.x * canvasElement.width,
-                   punto.y * canvasElement.height,
-                   4, 0, 2 * Math.PI);
-            ctx.fill();
-        });
-    });
-}
-
-// Evento para el botón de toggle
-document.getElementById('togglePuntos').addEventListener('click', () => {
-    mostrarPuntos = !mostrarPuntos;
-    document.getElementById('togglePuntos').textContent = 
-        mostrarPuntos ? '🔘 Ocultar Puntos' : '🔘 Mostrar Puntos';
-    
-    // Mostrar/ocultar canvas
-    canvasElement.style.display = mostrarPuntos ? 'block' : 'none';
-});
-        // Variables globales
-let camaraActual = 'user'; // 'user' = frontal, 'environment' = trasera
-let camaraActiva = null;
-
-// Modifica la función iniciarSistema para usar camaraActual:
-const camera = new Camera(videoElement, {
-    onFrame: async () => {
-        await hands.send({ image: videoElement });
-    },
-    width: 640,
-    height: 480,
-    facingMode: camaraActual
-});
-
-camaraActiva = camera;
-await camera.start();
-
-// Función para cambiar cámara
-async function cambiarCamara() {
-    if (!camaraActiva) return;
-    
-    try {
-        // Detener cámara actual
-        await camaraActiva.stop();
+        function limpiarCanvas() {
+            ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        }
         
-        // Cambiar entre frontal/trasera
-        camaraActual = camaraActual === 'user' ? 'environment' : 'user';
+        // ==================== FUNCIONES DE CONTROL ====================
         
-        // Reiniciar con nueva cámara
-        camaraActiva = new Camera(videoElement, {
-            onFrame: async () => {
-                await hands.send({ image: videoElement });
-            },
-            width: 640,
-            height: 480,
-            facingMode: camaraActual
-        });
+        function togglePuntos() {
+            mostrarPuntos = !mostrarPuntos;
+            const btn = document.getElementById('togglePuntos');
+            
+            if (mostrarPuntos) {
+                btn.textContent = '🔘 Ocultar Puntos';
+                btn.classList.add('active');
+                canvasElement.style.display = 'block';
+            } else {
+                btn.textContent = '🔘 Mostrar Puntos';
+                btn.classList.remove('active');
+                canvasElement.style.display = 'none';
+                limpiarCanvas();
+            }
+        }
         
-        await camaraActiva.start();
-        
-        // Actualizar texto del botón
-        const texto = camaraActual === 'user' ? '📷 Frontal' : '📷 Trasera';
-        document.getElementById('toggleCamara').textContent = texto;
-        
-    } catch (error) {
-        console.error('Error cambiando cámara:', error);
-        alert('Error cambiando cámara: ' + error.message);
-    }
-}
-
-// Evento para el botón
-document.getElementById('toggleCamara').addEventListener('click', cambiarCamara);
-        async function iniciarSistema() {
+        async function cambiarCamara() {
+            if (!cameraInstance) return;
+            
             try {
+                await cameraInstance.stop();
+                camaraFrontal = !camaraFrontal;
+                
+                cameraInstance = new Camera(videoElement, {
+                    onFrame: async () => {
+                        await handsInstance.send({ image: videoElement });
+                    },
+                    width: 640,
+                    height: 480,
+                    facingMode: camaraFrontal ? 'user' : 'environment'
+                });
+                
+                await cameraInstance.start();
+                
+                const btn = document.getElementById('toggleCamara');
+                if (camaraFrontal) {
+                    btn.textContent = '📷 Cámara Trasera';
+                } else {
+                    btn.textContent = '📷 Cámara Frontal';
+                }
+                
+            } catch (error) {
+                console.error('Error cambiando cámara:', error);
+                alert('No se pudo cambiar la cámara: ' + error.message);
+            }
+        }
+        
+        // ==================== INICIALIZACIÓN PRINCIPAL ====================
+        
+        async function iniciarSistema() {
+            if (sistemaIniciado) return;
+            
+            try {
+                sistemaIniciado = true;
                 resultadoDiv.textContent = "Iniciando...";
                 
                 // 1. Configurar MediaPipe Hands
-                const hands = new Hands({
+                handsInstance = new Hands({
                     locateFile: (file) => 
                         `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
                 });
                 
-                hands.setOptions({
+                handsInstance.setOptions({
                     maxNumHands: 1,
                     modelComplexity: 0,
                     minDetectionConfidence: 0.6,
@@ -301,110 +280,127 @@ document.getElementById('toggleCamara').addEventListener('click', cambiarCamara)
                 let ultimoTiempo = 0;
                 const intervaloMinimo = 400; // ms entre predicciones
                 
-                hands.onResults(async (results) => {
+                handsInstance.onResults((results) => {
+                    // Limpiar canvas
+                    ctx.save();
+                    ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+                    
+                    // Dibujar video
+                    ctx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                    
                     const ahora = Date.now();
                     
                     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                        // Dibujar puntos si está activado
+                        if (mostrarPuntos) {
+                            dibujarLandmarks(results.multiHandLandmarks[0]);
+                        }
+                        
                         // Evitar predicciones demasiado seguidas
-                        if (ahora - ultimoTiempo < intervaloMinimo) return;
+                        if (ahora - ultimoTiempo < intervaloMinimo) {
+                            ctx.restore();
+                            return;
+                        }
                         
                         const landmarks = results.multiHandLandmarks[0];
                         const puntos = [];
                         
-                        // Extraer los 63 valores (21 puntos * 3 coordenadas)
+                        // Extraer 63 puntos
                         landmarks.forEach(punto => {
                             puntos.push(punto.x, punto.y, punto.z);
                         });
                         
                         // Enviar a la API
-                        try {
-                            const response = await fetch(API_URL, {
-                                method: 'POST',
-                                headers: { 
-                                    'Content-Type': 'application/json',
-                                    'Accept': 'application/json'
-                                },
-                                body: JSON.stringify({ puntos: puntos })
-                            });
-                            
-                            if (!response.ok) {
-                                throw new Error(`Error API: ${response.status}`);
-                            }
-                            
-                            const data = await response.json();
-                            const indice = data.indice;
-                            
-                            // 🔧 IMPORTANTE: Validar que el índice esté en el rango correcto (0-20)
-                            if (indice >= 0 && indice < letras.length) {
-                                const letra = letras[indice];
+                        enviarPrediccion(puntos).then(data => {
+                            if (data.indice >= 0 && data.indice < letras.length) {
+                                const letra = letras[data.indice];
                                 if (letra !== ultimaPrediccion) {
                                     resultadoDiv.textContent = letra;
                                     ultimaPrediccion = letra;
-                                    console.log(`Predicción: ${letra} (índice ${indice})`);
                                 }
-                            } else if (indice === -1) {
-                                resultadoDiv.textContent = "Error modelo";
-                            } else {
-                                resultadoDiv.textContent = "?";
-                                console.warn(`Índice fuera de rango: ${indice}`);
                             }
-                            
                             ultimoTiempo = ahora;
-                            
-                        } catch (error) {
-                            console.error('Error en predicción:', error);
+                        }).catch(error => {
+                            console.error('Error:', error);
                             resultadoDiv.textContent = "Error API";
-                        }
+                        });
+                        
                     } else {
                         resultadoDiv.textContent = "✋ Muestra tu mano";
                         ultimaPrediccion = '';
                     }
+                    
+                    ctx.restore();
                 });
                 
                 // 3. Iniciar cámara
-                const camera = new Camera(videoElement, {
+                cameraInstance = new Camera(videoElement, {
                     onFrame: async () => {
-                        await hands.send({ image: videoElement });
+                        await handsInstance.send({ image: videoElement });
                     },
                     width: 640,
                     height: 480,
                     facingMode: 'user'
                 });
                 
-                await camera.start();
+                await cameraInstance.start();
                 resultadoDiv.textContent = "✅ ¡Listo! Muestra tu mano";
                 
-                // Mostrar información en consola
-                console.log(`Modelo configurado para ${letras.length} letras:`);
-                console.log(letras.map((l, i) => `${i}: ${l}`).join(', '));
+                // 4. Configurar botones
+                document.getElementById('togglePuntos').addEventListener('click', togglePuntos);
+                document.getElementById('toggleCamara').addEventListener('click', cambiarCamara);
+                
+                console.log('✅ Sistema iniciado correctamente');
+                console.log('🔤 Letras disponibles:', letras);
                 
             } catch (error) {
                 console.error('Error crítico:', error);
                 resultadoDiv.textContent = "❌ Error al iniciar";
+                sistemaIniciado = false;
                 
                 if (error.name === 'NotAllowedError') {
                     alert("Permiso de cámara denegado. Por favor, recarga y permite acceso.");
                 } else if (error.name === 'NotFoundError') {
                     alert("No se encontró cámara. Conecta una cámara o verifica permisos.");
+                } else {
+                    alert("Error: " + error.message);
                 }
             }
         }
         
-        // Eventos para iniciar
+        async function enviarPrediccion(puntos) {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ puntos: puntos })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Error API: ${response.status}`);
+            }
+            
+            return await response.json();
+        }
+        
+        // ==================== EVENTOS ====================
+        
+        // Iniciar al hacer clic
         document.addEventListener('click', () => {
-            if (!window.sistemaIniciado) {
-                window.sistemaIniciado = true;
+            if (!sistemaIniciado) {
                 iniciarSistema();
             }
         }, { once: true });
         
         // También iniciar con tecla Espacio
         document.addEventListener('keydown', (e) => {
-            if (e.code === 'Space' && !window.sistemaIniciado) {
-                window.sistemaIniciado = true;
+            if (e.code === 'Space' && !sistemaIniciado) {
                 iniciarSistema();
             }
         });
+        
     </script>
 </body>
 </html>
