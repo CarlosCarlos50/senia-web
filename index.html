@@ -178,8 +178,7 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            /* SIN MIRROR: ya no se invierte horizontalmente */
-            transform: none;
+            /* No hay transform: scaleX(-1) para evitar espejo extra */
         }
 
         .output_canvas {
@@ -545,7 +544,6 @@
 
         // ==================== REFINAMIENTO GEOMÉTRICO PARA A, S, T ====================
         function refinarLetraConPulgar(landmarks, letraPredicha, handedness) {
-            // Solo refinar si es A, S o T
             if (!['A', 'S', 'T'].includes(letraPredicha)) return letraPredicha;
 
             const thumbTip = landmarks[4];
@@ -554,10 +552,8 @@
             const indexTip = landmarks[8];
             const middleTip = landmarks[12];
 
-            // Detectar si es mano derecha o izquierda
             const isRight = (handedness === 'Right');
 
-            // Pulgar "afuera" (para A)
             let pulgarAfuera;
             if (isRight) {
                 pulgarAfuera = thumbTip.x < indexMcp.x;
@@ -565,18 +561,12 @@
                 pulgarAfuera = thumbTip.x > indexMcp.x;
             }
 
-            // Pulgar "arriba" (para S)
             const pulgarArriba = thumbTip.y < middleMcp.y;
-
-            // Pulgar "dentro" (entre índice y medio) para T
             const pulgarDentro = (thumbTip.y > indexTip.y) && (thumbTip.y > middleTip.y);
 
-            // Aplicar reglas
             if (letraPredicha === 'A' && pulgarAfuera) return 'A';
             if (letraPredicha === 'S' && pulgarArriba) return 'S';
             if (letraPredicha === 'T' && pulgarDentro) return 'T';
-
-            // Si no coinciden las reglas, devolver la predicción original
             return letraPredicha;
         }
 
@@ -619,6 +609,9 @@
                     ctx.save();
                     ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
+                    // 🔁 Dibujar el video actual en el canvas (sin mirror extra)
+                    ctx.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+
                     const ahora = Date.now();
 
                     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
@@ -637,7 +630,6 @@
                         const puntos = [];
                         landmarks.forEach(p => puntos.push(p.x, p.y, p.z));
 
-                        // Obtener orientación de la mano
                         let handedness = null;
                         if (results.multiHandedness && results.multiHandedness.length > 0) {
                             handedness = results.multiHandedness[0].label;
@@ -647,7 +639,6 @@
                             const data = await enviarPrediccion(puntos);
                             if (data.indice >= 0 && data.indice < letras.length) {
                                 let letra = letras[data.indice];
-                                // Aplicar refinamiento si es A, S o T
                                 if (handedness && ['A', 'S', 'T'].includes(letra)) {
                                     letra = refinarLetraConPulgar(landmarks, letra, handedness);
                                 }
@@ -666,6 +657,7 @@
                         resultadoDiv.textContent = "✋ Muestra tu mano";
                         resultadoDiv.style.boxShadow = "none";
                     }
+
                     ctx.restore();
                 });
 
@@ -678,7 +670,6 @@
                 await cameraInstance.start();
                 resultadoDiv.textContent = "✅ ¡Listo! Muestra tu mano";
 
-                // Configurar botones
                 document.getElementById('togglePuntos').addEventListener('click', togglePuntos);
                 document.getElementById('toggleCamara').addEventListener('click', cambiarCamara);
                 document.getElementById('activarVoz').addEventListener('click', () => {
@@ -705,7 +696,6 @@
             }
         }
 
-        // Eventos de inicio
         document.addEventListener('click', () => {
             if (!sistemaIniciado) iniciarSistema();
         }, { once: true });
@@ -714,7 +704,6 @@
             if (e.code === 'Space' && !sistemaIniciado) iniciarSistema();
         });
 
-        // Precargar voces
         window.speechSynthesis.onvoiceschanged = () => {
             console.log("Voces cargadas:", speechSynthesis.getVoices().length);
         };
