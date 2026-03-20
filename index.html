@@ -5,11 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SeñIA - Intérprete Avanzado</title>
     
-    <!-- Librerías MediaPipe -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    
-    <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"/>
     
     <style>
@@ -45,7 +42,6 @@
             transition: background-color var(--transition-speed), color var(--transition-speed);
         }
 
-        /* Botón de tema flotante */
         .theme-toggle {
             position: fixed;
             top: 20px;
@@ -70,7 +66,6 @@
             box-shadow: 0 0 20px var(--primary-glow);
         }
 
-        /* Contenedor principal con animación de entrada */
         #main-wrapper {
             opacity: 0;
             transform: translateY(30px);
@@ -91,7 +86,6 @@
             transform: translateY(0);
         }
 
-        /* Encabezado */
         .page-header {
             width: 100%;
             display: flex;
@@ -109,7 +103,6 @@
             text-align: center;
         }
 
-        /* Áreas de texto (palabra y frase) */
         .texto-panel {
             width: 100%;
             max-width: 600px;
@@ -142,7 +135,6 @@
             color: var(--text-main);
         }
 
-        /* Área de resultado (letra grande) */
         #resultado {
             font-size: 2rem;
             font-weight: bold;
@@ -160,7 +152,6 @@
             transition: all 0.3s ease;
         }
 
-        /* Contenedor de video */
         .video-container {
             position: relative;
             width: 100%;
@@ -178,7 +169,7 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            /* No hay transform: scaleX(-1) para evitar espejo extra */
+            /* No se aplica mirror: la cámara frontal ya da espejo natural */
         }
 
         .output_canvas {
@@ -190,9 +181,9 @@
             pointer-events: none;
             display: none;
             z-index: 5;
+            background: transparent !important;
         }
 
-        /* Línea de escaneo decorativa */
         .scan-line {
             position: absolute;
             top: 0;
@@ -212,7 +203,6 @@
             100% { top: 0; }
         }
 
-        /* Botones de control */
         .controles {
             margin: 15px;
             display: flex;
@@ -252,7 +242,6 @@
             box-shadow: 0 0 15px #00aaff;
         }
 
-        /* Instrucciones */
         .instrucciones {
             margin-top: 20px;
             color: var(--text-muted);
@@ -317,7 +306,7 @@
     </div>
 
     <script>
-        // ==================== LÓGICA DE TEMA ====================
+        // ==================== TEMA ====================
         const themeBtn = document.getElementById('theme-btn');
         const themeIcon = document.getElementById('theme-icon');
         const body = document.body;
@@ -345,8 +334,7 @@
             }, 50);
         });
 
-        // ==================== FUNCIONALIDAD COMPLETA ====================
-        // Configuración
+        // ==================== CONFIGURACIÓN ====================
         const CONFIG = {
             detectarEspacioPorDesaparicion: true,
             TIEMPO_SILENCIO: 1500,
@@ -370,7 +358,7 @@
         const fraseDiv = document.getElementById('frase');
         const ctx = canvasElement.getContext('2d');
 
-        // Etiquetas de letras (21)
+        // Letras del modelo
         const letras = ["A", "B", "C", "D", "E", "F", "G", "H", "I", 
                         "L", "M", "N", "O", "P", "R", "S", "T", 
                         "U", "V", "W", "Y"];
@@ -382,33 +370,42 @@
         let handsInstance = null;
         let sistemaIniciado = false;
 
-        canvasElement.width = 640;
-        canvasElement.height = 480;
-
-        // Conexiones de la mano
+        // Conexiones para dibujar
         const CONEXIONES_MANO = [
             [0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],
             [0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],
             [0,17],[17,18],[18,19],[19,20]
         ];
 
-        // ==================== FUNCIONES DE DIBUJO ====================
+        // ==================== DIBUJO DE PUNTOS (sobre canvas transparente) ====================
         function dibujarLandmarks(landmarks) {
             if (!landmarks || landmarks.length === 0) return;
+
+            // Obtener el tamaño real del contenedor de video (donde se muestra el video)
+            const container = document.querySelector('.video-container');
+            const rect = container.getBoundingClientRect();
+            const scaleX = rect.width;
+            const scaleY = rect.height;
+
+            ctx.clearRect(0, 0, scaleX, scaleY);
             ctx.strokeStyle = '#2de0d4';
             ctx.fillStyle = '#ffffff';
             ctx.lineWidth = 3;
+
+            // Dibujar conexiones
             CONEXIONES_MANO.forEach(([inicio, fin]) => {
                 const p1 = landmarks[inicio];
                 const p2 = landmarks[fin];
                 ctx.beginPath();
-                ctx.moveTo(p1.x * canvasElement.width, p1.y * canvasElement.height);
-                ctx.lineTo(p2.x * canvasElement.width, p2.y * canvasElement.height);
+                ctx.moveTo(p1.x * scaleX, p1.y * scaleY);
+                ctx.lineTo(p2.x * scaleX, p2.y * scaleY);
                 ctx.stroke();
             });
+
+            // Dibujar puntos
             landmarks.forEach(punto => {
                 ctx.beginPath();
-                ctx.arc(punto.x * canvasElement.width, punto.y * canvasElement.height, 4, 0, 2 * Math.PI);
+                ctx.arc(punto.x * scaleX, punto.y * scaleY, 5, 0, 2 * Math.PI);
                 ctx.fill();
             });
         }
@@ -424,6 +421,10 @@
             if (mostrarPuntos) {
                 btn.innerHTML = '<i class="bi bi-dot"></i> Ocultar Puntos';
                 canvasElement.style.display = 'block';
+                // Ajustar tamaño del canvas al contenedor de video en cada frame
+                const container = document.querySelector('.video-container');
+                canvasElement.width = container.clientWidth;
+                canvasElement.height = container.clientHeight;
             } else {
                 btn.innerHTML = '<i class="bi bi-dot"></i> Mostrar Puntos';
                 canvasElement.style.display = 'none';
@@ -451,7 +452,7 @@
             }
         }
 
-        // ==================== SISTEMA DE VOZ ====================
+        // ==================== VOZ Y CORRECCIÓN ====================
         function hablar(texto) {
             if (!vozActivada) return;
             speechSynthesis.cancel();
@@ -465,7 +466,6 @@
             speechSynthesis.speak(mensaje);
         }
 
-        // ==================== CORRECCIÓN ORTOGRÁFICA ====================
         async function corregir(texto) {
             const params = new URLSearchParams();
             params.append("text", texto);
@@ -525,7 +525,7 @@
             }
         }
 
-        // Detección de pausas
+        // Pausas
         setInterval(() => {
             const ahora = Date.now();
             if (palabraActual.length > 0 && ahora - ultimoTiempo > CONFIG.TIEMPO_SILENCIO) {
@@ -542,7 +542,7 @@
             }
         }, 1000);
 
-        // ==================== REFINAMIENTO GEOMÉTRICO PARA A, S, T ====================
+        // Refinamiento A, S, T
         function refinarLetraConPulgar(landmarks, letraPredicha, handedness) {
             if (!['A', 'S', 'T'].includes(letraPredicha)) return letraPredicha;
 
@@ -570,7 +570,7 @@
             return letraPredicha;
         }
 
-        // ==================== ENVÍO A LA API ====================
+        // ==================== API Y MEDIAPIPE ====================
         async function enviarPrediccion(puntos) {
             const response = await fetch(CONFIG.API_URL, {
                 method: 'POST',
@@ -584,7 +584,6 @@
             return await response.json();
         }
 
-        // ==================== INICIALIZACIÓN PRINCIPAL ====================
         async function iniciarSistema() {
             if (sistemaIniciado) return;
             try {
@@ -606,25 +605,20 @@
                 const intervaloMinimo = 400;
 
                 handsInstance.onResults(async (results) => {
-                    ctx.save();
-                    ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+                    if (!mostrarPuntos) return;
 
-                    // 🔁 Dibujar el video actual en el canvas (sin mirror extra)
-                    ctx.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+                    // Dibujar puntos sobre el canvas transparente
+                    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                        dibujarLandmarks(results.multiHandLandmarks[0]);
+                    } else {
+                        limpiarCanvas();
+                    }
 
                     const ahora = Date.now();
-
                     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
                         manoVisible = true;
 
-                        if (mostrarPuntos) {
-                            dibujarLandmarks(results.multiHandLandmarks[0]);
-                        }
-
-                        if (ahora - ultimoTiempoPrediccion < intervaloMinimo) {
-                            ctx.restore();
-                            return;
-                        }
+                        if (ahora - ultimoTiempoPrediccion < intervaloMinimo) return;
 
                         const landmarks = results.multiHandLandmarks[0];
                         const puntos = [];
@@ -657,8 +651,6 @@
                         resultadoDiv.textContent = "✋ Muestra tu mano";
                         resultadoDiv.style.boxShadow = "none";
                     }
-
-                    ctx.restore();
                 });
 
                 cameraInstance = new Camera(videoElement, {
@@ -707,6 +699,15 @@
         window.speechSynthesis.onvoiceschanged = () => {
             console.log("Voces cargadas:", speechSynthesis.getVoices().length);
         };
+
+        // Ajustar tamaño del canvas cuando cambie el tamaño de la ventana
+        window.addEventListener('resize', () => {
+            if (mostrarPuntos) {
+                const container = document.querySelector('.video-container');
+                canvasElement.width = container.clientWidth;
+                canvasElement.height = container.clientHeight;
+            }
+        });
     </script>
 </body>
 </html>
