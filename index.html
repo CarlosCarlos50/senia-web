@@ -169,7 +169,8 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            /* No se aplica mirror: la cámara frontal ya da espejo natural */
+            /* Aplicamos espejo para cancelar el espejo natural de la cámara frontal */
+            transform: scaleX(-1);
         }
 
         .output_canvas {
@@ -377,11 +378,11 @@
             [0,17],[17,18],[18,19],[19,20]
         ];
 
-        // ==================== DIBUJO DE PUNTOS (sobre canvas transparente) ====================
+        // ==================== DIBUJO DE PUNTOS (con espejo de coordenadas) ====================
         function dibujarLandmarks(landmarks) {
             if (!landmarks || landmarks.length === 0) return;
 
-            // Obtener el tamaño real del contenedor de video (donde se muestra el video)
+            // Obtener el tamaño real del contenedor de video
             const container = document.querySelector('.video-container');
             const rect = container.getBoundingClientRect();
             const scaleX = rect.width;
@@ -392,20 +393,21 @@
             ctx.fillStyle = '#ffffff';
             ctx.lineWidth = 3;
 
-            // Dibujar conexiones
+            // Dibujar conexiones con coordenadas reflejadas en X
             CONEXIONES_MANO.forEach(([inicio, fin]) => {
                 const p1 = landmarks[inicio];
                 const p2 = landmarks[fin];
                 ctx.beginPath();
-                ctx.moveTo(p1.x * scaleX, p1.y * scaleY);
-                ctx.lineTo(p2.x * scaleX, p2.y * scaleY);
+                // Reflejar X: (1 - x) porque el video tiene espejo
+                ctx.moveTo((1 - p1.x) * scaleX, p1.y * scaleY);
+                ctx.lineTo((1 - p2.x) * scaleX, p2.y * scaleY);
                 ctx.stroke();
             });
 
-            // Dibujar puntos
+            // Dibujar puntos reflejados
             landmarks.forEach(punto => {
                 ctx.beginPath();
-                ctx.arc(punto.x * scaleX, punto.y * scaleY, 5, 0, 2 * Math.PI);
+                ctx.arc((1 - punto.x) * scaleX, punto.y * scaleY, 5, 0, 2 * Math.PI);
                 ctx.fill();
             });
         }
@@ -421,7 +423,7 @@
             if (mostrarPuntos) {
                 btn.innerHTML = '<i class="bi bi-dot"></i> Ocultar Puntos';
                 canvasElement.style.display = 'block';
-                // Ajustar tamaño del canvas al contenedor de video en cada frame
+                // Ajustar tamaño del canvas al contenedor de video
                 const container = document.querySelector('.video-container');
                 canvasElement.width = container.clientWidth;
                 canvasElement.height = container.clientHeight;
