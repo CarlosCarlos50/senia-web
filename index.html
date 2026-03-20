@@ -9,11 +9,11 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     
-    <!-- Bootstrap Icons (para íconos bonitos) -->
+    <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"/>
     
     <style>
-        /* ========== VARIABLES Y TEMA (del Script 2) ========== */
+        /* ========== VARIABLES Y TEMA ========== */
         :root {
             --bg-color: #0b2926;
             --primary: #2de0d4;
@@ -45,7 +45,7 @@
             transition: background-color var(--transition-speed), color var(--transition-speed);
         }
 
-        /* Botón de cambio de tema (flotante) */
+        /* Botón de tema flotante */
         .theme-toggle {
             position: fixed;
             top: 20px;
@@ -109,7 +109,7 @@
             text-align: center;
         }
 
-        /* ========== ÁREAS DE TEXTO (palabra y frase) ========== */
+        /* Áreas de texto (palabra y frase) */
         .texto-panel {
             width: 100%;
             max-width: 600px;
@@ -142,7 +142,7 @@
             color: var(--text-main);
         }
 
-        /* ========== ÁREA DE RESULTADO (letra grande) ========== */
+        /* Área de resultado (letra grande) */
         #resultado {
             font-size: 2rem;
             font-weight: bold;
@@ -160,7 +160,7 @@
             transition: all 0.3s ease;
         }
 
-        /* ========== CONTENEDOR DE VIDEO ========== */
+        /* Contenedor de video */
         .video-container {
             position: relative;
             width: 100%;
@@ -178,7 +178,8 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transform: scaleX(-1);
+            /* SIN MIRROR: ya no se invierte horizontalmente */
+            transform: none;
         }
 
         .output_canvas {
@@ -212,7 +213,7 @@
             100% { top: 0; }
         }
 
-        /* ========== BOTONES DE CONTROL ========== */
+        /* Botones de control */
         .controles {
             margin: 15px;
             display: flex;
@@ -252,7 +253,7 @@
             box-shadow: 0 0 15px #00aaff;
         }
 
-        /* ========== INSTRUCCIONES ========== */
+        /* Instrucciones */
         .instrucciones {
             margin-top: 20px;
             color: var(--text-muted);
@@ -262,7 +263,6 @@
             line-height: 1.6;
         }
 
-        /* Responsive */
         @media (max-width: 768px) {
             #resultado { font-size: 1.8rem; padding: 12px; }
             .btn { padding: 8px 16px; font-size: 0.9rem; }
@@ -273,28 +273,23 @@
 </head>
 <body>
 
-    <!-- Botón de tema flotante -->
     <button class="theme-toggle" id="theme-btn">
         <i class="bi bi-moon-stars-fill" id="theme-icon"></i>
     </button>
 
-    <!-- Contenedor principal con animación -->
     <div id="main-wrapper">
         <header class="page-header">
             <h1>SeñIA Intérprete Avanzado</h1>
         </header>
 
-        <!-- Botones de control (puntos, cámara, voz) -->
         <div class="controles">
             <button id="togglePuntos" class="btn"><i class="bi bi-dot"></i> Mostrar Puntos</button>
             <button id="toggleCamara" class="btn"><i class="bi bi-camera-video"></i> Cambiar Cámara</button>
             <button id="activarVoz" class="btn"><i class="bi bi-mic"></i> Activar Voz</button>
         </div>
 
-        <!-- Panel de resultados -->
         <div id="resultado">HAZ CLIC PARA INICIAR</div>
 
-        <!-- Áreas de palabra y frase (incorporadas del Script 1) -->
         <div class="texto-panel">
             <div class="palabra-container">
                 <h3><i class="bi bi-type"></i> Palabra actual:</h3>
@@ -306,14 +301,12 @@
             </div>
         </div>
 
-        <!-- Contenedor de video con línea de escaneo -->
         <div class="video-container">
             <div class="scan-line"></div>
             <video class="input_video"></video>
             <canvas class="output_canvas"></canvas>
         </div>
 
-        <!-- Instrucciones -->
         <div class="instrucciones">
             <i class="bi bi-info-circle"></i><br>
             • Haz clic en cualquier lugar para activar la cámara<br>
@@ -325,12 +318,11 @@
     </div>
 
     <script>
-        // ==================== LÓGICA DE TEMA (del Script 2) ====================
+        // ==================== LÓGICA DE TEMA ====================
         const themeBtn = document.getElementById('theme-btn');
         const themeIcon = document.getElementById('theme-icon');
         const body = document.body;
 
-        // Cargar tema guardado
         if (localStorage.getItem('theme') === 'light') {
             body.setAttribute('data-theme', 'light');
             themeIcon.classList.replace('bi-moon-stars-fill', 'bi-sun-fill');
@@ -348,17 +340,14 @@
             }
         });
 
-        // Animación de entrada
         document.addEventListener("DOMContentLoaded", () => {
             setTimeout(() => {
                 document.getElementById("main-wrapper").classList.add("visible");
             }, 50);
         });
 
-        // ==================== FUNCIONALIDAD COMPLETA DEL SCRIPT 1 ====================
-        // (Todo lo que sigue es la lógica original del Script 1, ligeramente adaptada para convivir con el nuevo diseño)
-
-        // CONFIGURACIÓN
+        // ==================== FUNCIONALIDAD COMPLETA ====================
+        // Configuración
         const CONFIG = {
             detectarEspacioPorDesaparicion: true,
             TIEMPO_SILENCIO: 1500,
@@ -382,12 +371,12 @@
         const fraseDiv = document.getElementById('frase');
         const ctx = canvasElement.getContext('2d');
 
-        // Etiquetas de letras
+        // Etiquetas de letras (21)
         const letras = ["A", "B", "C", "D", "E", "F", "G", "H", "I", 
                         "L", "M", "N", "O", "P", "R", "S", "T", 
                         "U", "V", "W", "Y"];
 
-        // Variables de control MediaPipe
+        // Variables MediaPipe
         let mostrarPuntos = false;
         let camaraFrontal = true;
         let cameraInstance = null;
@@ -397,24 +386,25 @@
         canvasElement.width = 640;
         canvasElement.height = 480;
 
+        // Conexiones de la mano
         const CONEXIONES_MANO = [
             [0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],
             [0,9],[9,10],[10,11],[11,12],[0,13],[13,14],[14,15],[15,16],
             [0,17],[17,18],[18,19],[19,20]
         ];
 
-        // Funciones de dibujo
+        // ==================== FUNCIONES DE DIBUJO ====================
         function dibujarLandmarks(landmarks) {
             if (!landmarks || landmarks.length === 0) return;
             ctx.strokeStyle = '#2de0d4';
             ctx.fillStyle = '#ffffff';
             ctx.lineWidth = 3;
             CONEXIONES_MANO.forEach(([inicio, fin]) => {
-                const puntoInicio = landmarks[inicio];
-                const puntoFin = landmarks[fin];
+                const p1 = landmarks[inicio];
+                const p2 = landmarks[fin];
                 ctx.beginPath();
-                ctx.moveTo(puntoInicio.x * canvasElement.width, puntoInicio.y * canvasElement.height);
-                ctx.lineTo(puntoFin.x * canvasElement.width, puntoFin.y * canvasElement.height);
+                ctx.moveTo(p1.x * canvasElement.width, p1.y * canvasElement.height);
+                ctx.lineTo(p2.x * canvasElement.width, p2.y * canvasElement.height);
                 ctx.stroke();
             });
             landmarks.forEach(punto => {
@@ -428,7 +418,7 @@
             ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
         }
 
-        // Controles de puntos y cámara
+        // ==================== CONTROLES ====================
         function togglePuntos() {
             mostrarPuntos = !mostrarPuntos;
             const btn = document.getElementById('togglePuntos');
@@ -462,7 +452,7 @@
             }
         }
 
-        // Sistema de voz
+        // ==================== SISTEMA DE VOZ ====================
         function hablar(texto) {
             if (!vozActivada) return;
             speechSynthesis.cancel();
@@ -476,7 +466,7 @@
             speechSynthesis.speak(mensaje);
         }
 
-        // Corrección ortográfica
+        // ==================== CORRECCIÓN ORTOGRÁFICA ====================
         async function corregir(texto) {
             const params = new URLSearchParams();
             params.append("text", texto);
@@ -503,7 +493,6 @@
             }
         }
 
-        // Procesar frase
         async function procesarFrase(frase) {
             console.log("Procesando frase:", frase);
             const fraseCorregida = await corregir(frase);
@@ -511,7 +500,7 @@
             hablar(fraseCorregida);
         }
 
-        // Procesar predicción de letra
+        // ==================== PROCESAMIENTO DE PREDICCIÓN ====================
         function procesarPrediccion(letra) {
             const ahora = Date.now();
             if (letra !== ultimaLetra) {
@@ -520,7 +509,6 @@
                 ultimoTiempo = ahora;
                 palabraDiv.innerText = palabraActual;
                 resultadoDiv.innerText = letra;
-                // Efecto de destello al recibir letra
                 resultadoDiv.style.boxShadow = "0 0 30px var(--primary)";
                 setTimeout(() => {
                     resultadoDiv.style.boxShadow = "0 0 20px var(--primary-glow)";
@@ -555,7 +543,44 @@
             }
         }, 1000);
 
-        // Envío a la API
+        // ==================== REFINAMIENTO GEOMÉTRICO PARA A, S, T ====================
+        function refinarLetraConPulgar(landmarks, letraPredicha, handedness) {
+            // Solo refinar si es A, S o T
+            if (!['A', 'S', 'T'].includes(letraPredicha)) return letraPredicha;
+
+            const thumbTip = landmarks[4];
+            const indexMcp = landmarks[5];
+            const middleMcp = landmarks[9];
+            const indexTip = landmarks[8];
+            const middleTip = landmarks[12];
+
+            // Detectar si es mano derecha o izquierda
+            const isRight = (handedness === 'Right');
+
+            // Pulgar "afuera" (para A)
+            let pulgarAfuera;
+            if (isRight) {
+                pulgarAfuera = thumbTip.x < indexMcp.x;
+            } else {
+                pulgarAfuera = thumbTip.x > indexMcp.x;
+            }
+
+            // Pulgar "arriba" (para S)
+            const pulgarArriba = thumbTip.y < middleMcp.y;
+
+            // Pulgar "dentro" (entre índice y medio) para T
+            const pulgarDentro = (thumbTip.y > indexTip.y) && (thumbTip.y > middleTip.y);
+
+            // Aplicar reglas
+            if (letraPredicha === 'A' && pulgarAfuera) return 'A';
+            if (letraPredicha === 'S' && pulgarArriba) return 'S';
+            if (letraPredicha === 'T' && pulgarDentro) return 'T';
+
+            // Si no coinciden las reglas, devolver la predicción original
+            return letraPredicha;
+        }
+
+        // ==================== ENVÍO A LA API ====================
         async function enviarPrediccion(puntos) {
             const response = await fetch(CONFIG.API_URL, {
                 method: 'POST',
@@ -569,7 +594,7 @@
             return await response.json();
         }
 
-        // Inicialización del sistema MediaPipe
+        // ==================== INICIALIZACIÓN PRINCIPAL ====================
         async function iniciarSistema() {
             if (sistemaIniciado) return;
             try {
@@ -612,10 +637,20 @@
                         const puntos = [];
                         landmarks.forEach(p => puntos.push(p.x, p.y, p.z));
 
+                        // Obtener orientación de la mano
+                        let handedness = null;
+                        if (results.multiHandedness && results.multiHandedness.length > 0) {
+                            handedness = results.multiHandedness[0].label;
+                        }
+
                         try {
                             const data = await enviarPrediccion(puntos);
                             if (data.indice >= 0 && data.indice < letras.length) {
-                                const letra = letras[data.indice];
+                                let letra = letras[data.indice];
+                                // Aplicar refinamiento si es A, S o T
+                                if (handedness && ['A', 'S', 'T'].includes(letra)) {
+                                    letra = refinarLetraConPulgar(landmarks, letra, handedness);
+                                }
                                 procesarPrediccion(letra);
                             }
                             ultimoTiempoPrediccion = ahora;
